@@ -1,0 +1,5 @@
+deepfake-backend/env/
+deepfake-backend/venv/
+# local Python virtual environments and build artifacts
+*.pyc
+__pycache__/
