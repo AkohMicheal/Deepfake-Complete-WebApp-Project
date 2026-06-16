@@ -1,0 +1,35 @@
+# ==============================================================================
+# Deepfake Backend — Git Ignore
+# ==============================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+venv/
+env/
+.venv/
+.env
+
+# Model Weights (hosted on HuggingFace Hub)
+*.h5
+*.keras
+*.pb
+saved_model/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp uploads
+tmp/
+temp/

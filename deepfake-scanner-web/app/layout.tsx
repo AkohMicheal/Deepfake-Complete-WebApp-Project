@@ -25,21 +25,20 @@ export const viewport: Viewport = {
 // Comprehensive SEO & Social Graph Metadata Configuration
 export const metadata: Metadata = {
   title: {
-    default: "Dual-Stream Deepfake Detector | Real-Time Media Verification",
+    default: "Dual-Stream Deepfake Detector | Image & Video Verification",
     template: "%s | Dual-Stream Detector",
   },
-  description: "Advanced web application utilizing unified spatial features and frequency domain DCT math to detect synthetic media distortions in real-time.",
-  keywords: ["Deepfake Detection", "Media Verification", "Dual-Stream Neural Network", "AI Ethics", "Frequency Domain Analysis"],
+  description: "Advanced deepfake detection for images and videos using dual-stream spatial-frequency neural network analysis. Upload photos or videos for instant AI-powered media verification.",
+  keywords: ["Deepfake Detection", "Image Verification", "Video Verification", "Dual-Stream Neural Network", "AI Ethics", "Frequency Domain Analysis", "Face Manipulation Detection"],
   authors: [{ name: "Micheal Akoh-Idoko Idoko" }],
   creator: "Micheal Akoh-Idoko Idoko",
-  metadataBase: new URL("https://yourdomain.com"), // Update with your deployment URL later
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://deepfake-scanner.vercel.app"),
   alternates: {
     canonical: "/",
   },
   openGraph: {
     title: "Dual-Stream Deepfake Detector",
-    description: "Verify media authenticity instantly via spatial-frequency anomaly mapping.",
-    url: "https://yourdomain.com",
+    description: "Verify image and video authenticity instantly via spatial-frequency anomaly mapping.",
     siteName: "Dual-Stream Detector",
     locale: "en_US",
     type: "website",
@@ -47,7 +46,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Dual-Stream Deepfake Detector",
-    description: "Real-time deepfake analysis running optimized edge-ready multi-stream networks.",
+    description: "Real-time deepfake analysis for images and videos using dual-stream neural networks.",
     creator: "@AkohTech",
   },
   robots: {

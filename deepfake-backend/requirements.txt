@@ -1,0 +1,23 @@
+# ==============================================================================
+# Dual-Stream Deepfake API — Python Dependencies
+# ==============================================================================
+# Install with:  pip install -r requirements.txt
+# ==============================================================================
+
+# --- Web Framework ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# --- Configuration ---
+pydantic-settings>=2.0.0
+
+# --- ML / AI ---
+tensorflow>=2.15.0
+mtcnn>=1.0.0
+
+# --- Image & Video Processing ---
+opencv-python-headless>=4.9.0
+numpy>=1.26.0
+
+# --- Model Distribution ---
+huggingface_hub>=0.23.0
