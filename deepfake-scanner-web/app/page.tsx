@@ -703,9 +703,8 @@ export default function DeepfakeScannerApp() {
       {/* HEADER / NAVIGATION BAR */}
       <header className="w-full bg-slate-900/60 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-40 px-4 md:px-8 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo */}
           <div className="flex items-center space-x-2 text-blue-500 cursor-pointer" onClick={() => setActiveTab("scanner")}>
-            <ShieldCheck size={28} />
+            <img src="/logo.png" alt="Dual-Stream AI Logo" className="w-7 h-7 rounded-full object-cover" />
             <span className="font-bold tracking-tight text-white text-lg md:text-xl">
               Dual-Stream AI
             </span>
