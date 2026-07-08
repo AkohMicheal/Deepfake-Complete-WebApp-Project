@@ -1,5 +1,65 @@
+# ==============================================================================
+# Dual-Stream Deepfake Web App — Global Git Ignore
+# ==============================================================================
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+**/.env*.local
+
+# Node.js dependencies & Next.js builds
+node_modules/
+.next/
+out/
+build/
+.vercel
+
+# Python virtual environments & packages
 deepfake-backend/env/
 deepfake-backend/venv/
-# local Python virtual environments and build artifacts
-*.pyc
+deepfake-backend/.venv/
+**/env/
+**/venv/
+**/.venv/
+env/
+venv/
+.venv/
+
+# Python compiled cache & build outputs
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+
+# Model weights & local data cache
+*.h5
+*.keras
+*.pb
+saved_model/
+**/saved_model/
+tmp/
+temp/
+**/tmp/
+**/temp/
+
+# IDE configurations
+.idea/
+.vscode/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db

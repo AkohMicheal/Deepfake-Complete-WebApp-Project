@@ -21,3 +21,6 @@ numpy>=1.26.0
 
 # --- Model Distribution ---
 huggingface_hub>=0.23.0
+
+# --- File Upload --- 
+python-multipart>=0.0.32

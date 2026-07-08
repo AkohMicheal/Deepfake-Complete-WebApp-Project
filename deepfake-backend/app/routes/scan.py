@@ -269,6 +269,9 @@ def _process_video(
 ) -> dict:
     """Process a video through the multi-frame deepfake detection pipeline.
 
+    Reads frames sequentially one by one from disk, extracts face crops,
+    and immediately discards full-size frames to minimize memory usage.
+
     Args:
         video_path: Path to the temporary video file.
         model: The loaded Keras model.
@@ -278,65 +281,75 @@ def _process_video(
     Returns:
         Serialized scan result dict.
     """
-    frames = extract_frames(video_path, settings.max_sample_frames)
-    probabilities = _analyze_frames(frames, model, detector, settings)
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise VideoProcessingError("Could not open the video file for reading.")
 
-    if not probabilities:
-        raise FaceNotFoundError(
-            "No human face could be detected in any of the sampled frames."
-        )
+    try:
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        max_frames = settings.max_sample_frames
 
-    aggregated = aggregate_predictions(probabilities)
-    result = interpret_result(aggregated, len(probabilities), settings)
+        # Compute sampling indices
+        if total_frames <= 0:
+            # Fallback: read sequentially up to max_frames
+            indices = list(range(max_frames))
+            use_sequential = True
+        else:
+            from app.services.video import _compute_sample_indices
+            indices = _compute_sample_indices(total_frames, max_frames)
+            use_sequential = False
 
-    logger.info(
-        "Video scan complete: %s (%.2f%% confidence, %d frames)",
-        result.status,
-        result.confidence,
-        result.frames_analyzed,
-    )
-    return _result_to_dict(result, media_type="video")
+        probabilities: list[float] = []
 
+        for i, idx in enumerate(indices):
+            if use_sequential:
+                success, frame = cap.read()
+            else:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                success, frame = cap.read()
 
-# ---------------------------------------------------------------------------
-# Per-Frame Analysis (Video)
-# ---------------------------------------------------------------------------
+            if not success:
+                if use_sequential:
+                    break
+                logger.warning("Failed to read frame at index %d, skipping.", idx)
+                continue
 
-def _analyze_frames(
-    frames: list[np.ndarray],
-    model: tf.keras.Model,
-    detector: MTCNN,
-    settings: Settings,
-) -> list[float]:
-    """Run face detection and inference on each frame.
+            try:
+                # Extract face crop from the current frame
+                face_crop = detect_and_crop_face(frame, detector)
+                
+                # Delete full-resolution frame immediately to free memory
+                del frame
+                
+                # Preprocess face crop and run inference
+                spatial, frequency = prepare_dual_stream_inputs(
+                    face_crop, settings.input_size
+                )
+                prob = predict_single_frame(model, spatial, frequency)
+                probabilities.append(prob)
+                logger.debug("Frame %d/%d (index %d): %.2f%% fake probability", i + 1, len(indices), idx, prob)
+            except FaceNotFoundError:
+                logger.warning("Frame %d/%d (index %d): no face detected, skipping.", i + 1, len(indices), idx)
+                continue
+            except Exception as exc:
+                logger.error("Error analyzing frame %d: %s", i + 1, exc)
+                continue
 
-    Frames where no face is detected are skipped with a warning rather
-    than failing the entire scan. This is more resilient to frames with
-    occluded or off-camera faces.
-
-    Args:
-        frames: List of BGR video frames.
-        model: The loaded Keras model.
-        detector: The MTCNN detector.
-        settings: Application settings.
-
-    Returns:
-        List of per-frame fake probabilities for frames where a face
-        was successfully detected and analyzed.
-    """
-    probabilities: list[float] = []
-
-    for i, frame in enumerate(frames):
-        try:
-            face_crop = detect_and_crop_face(frame, detector)
-            spatial, frequency = prepare_dual_stream_inputs(
-                face_crop, settings.input_size
+        if not probabilities:
+            raise FaceNotFoundError(
+                "No human face could be detected in any of the sampled frames."
             )
-            prob = predict_single_frame(model, spatial, frequency)
-            probabilities.append(prob)
-            logger.debug("Frame %d/%d: %.2f%% fake probability", i + 1, len(frames), prob)
-        except FaceNotFoundError:
-            logger.warning("Frame %d/%d: no face detected, skipping.", i + 1, len(frames))
-            continue
 
-    return probabilities
+        aggregated = aggregate_predictions(probabilities)
+        result = interpret_result(aggregated, len(probabilities), settings)
+
+        logger.info(
+            "Video scan complete: %s (%.2f%% confidence, %d frames)",
+            result.status,
+            result.confidence,
+            result.frames_analyzed,
+        )
+        return _result_to_dict(result, media_type="video")
+
+    finally:
+        cap.release()

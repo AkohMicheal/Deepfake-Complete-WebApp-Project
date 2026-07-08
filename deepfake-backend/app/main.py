@@ -11,6 +11,13 @@ Run with:
     uvicorn app.main:app --reload
 """
 
+import os
+# Limit CPU threading for TensorFlow and NumPy to conserve memory in containerized environments
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["TF_NUM_INTRAOP_THREADS"] = "1"
+os.environ["TF_NUM_INTEROP_THREADS"] = "1"
+
 import logging
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
