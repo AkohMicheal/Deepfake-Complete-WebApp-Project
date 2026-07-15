@@ -59,6 +59,7 @@ interface ScanResult {
   explanation: string;
   framesAnalyzed: number;
   mediaType: "image" | "video";
+  gradcamBase64?: string;
 }
 
 // --- Pipeline step type ---
@@ -484,6 +485,7 @@ export default function DeepfakeScannerApp() {
             : "No synthetic artifacts detected."),
         framesAnalyzed: data.frames_analyzed || 1,
         mediaType: data.media_type || (isImageFile(file.name) ? "image" : "video"),
+        gradcamBase64: data.gradcam_base64,
       };
 
       setResult(scanResultData);
@@ -1013,16 +1015,40 @@ export default function DeepfakeScannerApp() {
                   </div>
 
                   {/* Detection Reasoning */}
-                  <div className="w-full bg-slate-950/40 p-4 rounded-xl border border-slate-800/80 text-left">
-                    <div className="flex items-center space-x-2 text-slate-300 mb-2">
-                      <Activity size={14} className="text-blue-400" />
-                      <span className="font-bold text-xs">
-                        {result.status.toLowerCase().includes("error") ? "Error Details" : "Detection Diagnostics"}
-                      </span>
+                  <div className="w-full bg-slate-950/40 p-4 rounded-xl border border-slate-800/80 text-left space-y-4">
+                    <div>
+                      <div className="flex items-center space-x-2 text-slate-300 mb-2">
+                        <Activity size={14} className="text-blue-400" />
+                        <span className="font-bold text-xs">
+                          {result.status.toLowerCase().includes("error") ? "Error Details" : "Detection Diagnostics"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                        {result.explanation}
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                      {result.explanation}
-                    </p>
+
+                    {result.gradcamBase64 && (
+                      <div className="pt-3 border-t border-slate-800/60">
+                        <div className="flex items-center space-x-2 text-slate-300 mb-3">
+                          <Brain size={14} className="text-purple-400" />
+                          <span className="font-bold text-xs">
+                            Explainable AI (Grad-CAM Activation Map)
+                          </span>
+                        </div>
+                        <div className="relative group overflow-hidden rounded-xl border border-slate-800 bg-slate-950/60 max-w-xs mx-auto md:max-w-none md:w-full flex justify-center p-2">
+                          <img
+                            src={result.gradcamBase64}
+                            alt="Explainable AI Heatmap"
+                            className="rounded-lg object-contain w-full h-48 md:h-56 transition-transform duration-500 group-hover:scale-105"
+                          />
+                          <div className="absolute bottom-3 left-3 right-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] text-slate-400 flex items-center justify-between">
+                            <span>Red = High Manipulation Probability</span>
+                            <span className="text-blue-400 font-medium">EfficientNet-B0</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Custom Error Contact Action */}
                     {result.status.toLowerCase().includes("error") && (

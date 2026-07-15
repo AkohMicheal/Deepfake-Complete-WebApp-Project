@@ -15,6 +15,8 @@ CPU-bound OpenCV, MTCNN, and TensorFlow operations from blocking the
 async event loop, allowing the server to handle concurrent requests.
 """
 
+import base64
+import gc
 import logging
 import os
 import tempfile
@@ -51,7 +53,7 @@ router = APIRouter()
 # Response Serialization Helper
 # ---------------------------------------------------------------------------
 
-def _result_to_dict(result: ScanResult, media_type: str) -> dict:
+def _result_to_dict(result: ScanResult, media_type: str, gradcam_base64: str | None = None) -> dict:
     """Convert a ``ScanResult`` dataclass to a JSON-serializable dict.
 
     Maintains backward compatibility with the original API response
@@ -64,7 +66,95 @@ def _result_to_dict(result: ScanResult, media_type: str) -> dict:
         "explanation": result.explanation,
         "frames_analyzed": result.frames_analyzed,
         "media_type": media_type,
+        "gradcam_base64": gradcam_base64,
     }
+
+
+# ---------------------------------------------------------------------------
+# Grad-CAM Heatmap Generation
+# ---------------------------------------------------------------------------
+
+def make_gradcam_heatmap(
+    model: tf.keras.Model,
+    spatial_input: np.ndarray,
+    frequency_input: np.ndarray,
+    face_crop: np.ndarray,
+) -> str | None:
+    """Generate a Grad-CAM heatmap overlay on the cropped face.
+
+    Args:
+        model: The loaded dual-stream Keras model.
+        spatial_input: Spatial stream tensor of shape (1, 224, 224, 3).
+        frequency_input: Frequency stream tensor of shape (1, 224, 224, 1).
+        face_crop: The original cropped face (RGB image).
+
+    Returns:
+        Base64-encoded data URI string of the superimposed image, or None on failure.
+    """
+    try:
+        # Build Grad-CAM model targeting the last conv layer of the spatial stream
+        # Layer name: "top_conv"
+        grad_model = tf.keras.models.Model(
+            inputs=model.inputs,
+            outputs=[model.get_layer("top_conv").output, model.get_layer("final_prediction").output]
+        )
+
+        with tf.GradientTape() as tape:
+            conv_outputs, predictions = grad_model([spatial_input, frequency_input])
+            # Predictions has shape (1, 2) where index 1 is the 'fake' class probability
+            loss = predictions[:, 1]
+
+        # Gradients of loss wrt conv_outputs
+        grads = tape.gradient(loss, conv_outputs)
+
+        # Average gradients over spatial dimensions (Global Average Pooling)
+        pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+        # Multiply the feature map by the pooled gradients to get the heatmap
+        conv_outputs_val = conv_outputs[0]
+        heatmap = conv_outputs_val @ pooled_grads[..., tf.newaxis]
+        heatmap = tf.squeeze(heatmap)
+
+        # Apply ReLU activation and normalize to [0, 1]
+        heatmap = tf.maximum(heatmap, 0.0)
+        max_val = tf.math.reduce_max(heatmap)
+        if max_val > 0:
+            heatmap = heatmap / max_val
+        else:
+            heatmap = heatmap * 0.0
+
+        # Convert to numpy for OpenCV processing
+        heatmap_np = heatmap.numpy()
+
+        # Resize face crop and heatmap to 224x224 (matching the spatial input size)
+        face_crop_resized = cv2.resize(face_crop, (224, 224))
+        heatmap_resized = cv2.resize(heatmap_np, (224, 224))
+
+        # Scale heatmap to 0-255
+        heatmap_255 = np.uint8(255 * heatmap_resized)
+
+        # Apply colormap (JET)
+        heatmap_color = cv2.applyColorMap(heatmap_255, cv2.COLORMAP_JET)
+
+        # Convert heatmap colormap from BGR to RGB (so it matches the RGB face crop)
+        heatmap_color_rgb = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
+
+        # Superimpose the heatmap onto the resized face crop
+        superimposed_img = cv2.addWeighted(face_crop_resized, 0.6, heatmap_color_rgb, 0.4, 0)
+
+        # Convert back to BGR for encoding
+        superimposed_img_bgr = cv2.cvtColor(superimposed_img, cv2.COLOR_RGB2BGR)
+
+        # Encode to JPEG
+        _, buffer = cv2.imencode(".jpg", superimposed_img_bgr)
+
+        # Encode to Base64
+        base64_str = base64.b64encode(buffer).decode("utf-8")
+        return f"data:image/jpeg;base64,{base64_str}"
+
+    except Exception as exc:
+        logger.error("Failed to generate Grad-CAM heatmap: %s", exc, exc_info=True)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +301,8 @@ def scan_media(
         if os.path.exists(temp_path):
             os.remove(temp_path)
             logger.debug("Temp file deleted: %s", temp_path)
+        # Force garbage collection to optimize memory usage
+        gc.collect()
 
 
 # ---------------------------------------------------------------------------
@@ -249,12 +341,14 @@ def _process_image(
     probability = predict_single_frame(model, spatial, frequency)
     result = interpret_result(probability, 1, settings)
 
+    gradcam_base64 = make_gradcam_heatmap(model, spatial, frequency, face_crop)
+
     logger.info(
         "Image scan complete: %s (%.2f%% confidence)",
         result.status,
         result.confidence,
     )
-    return _result_to_dict(result, media_type="image")
+    return _result_to_dict(result, media_type="image", gradcam_base64=gradcam_base64)
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +394,10 @@ def _process_video(
             use_sequential = False
 
         probabilities: list[float] = []
+        max_prob = -1.0
+        best_face_crop = None
+        best_spatial = None
+        best_frequency = None
 
         for i, idx in enumerate(indices):
             if use_sequential:
@@ -328,6 +426,13 @@ def _process_video(
                 prob = predict_single_frame(model, spatial, frequency)
                 probabilities.append(prob)
                 logger.debug("Frame %d/%d (index %d): %.2f%% fake probability", i + 1, len(indices), idx, prob)
+
+                if prob > max_prob:
+                    max_prob = prob
+                    best_face_crop = face_crop
+                    best_spatial = spatial
+                    best_frequency = frequency
+
             except FaceNotFoundError:
                 logger.warning("Frame %d/%d (index %d): no face detected, skipping.", i + 1, len(indices), idx)
                 continue
@@ -343,13 +448,17 @@ def _process_video(
         aggregated = aggregate_predictions(probabilities)
         result = interpret_result(aggregated, len(probabilities), settings)
 
+        gradcam_base64 = None
+        if best_face_crop is not None:
+            gradcam_base64 = make_gradcam_heatmap(model, best_spatial, best_frequency, best_face_crop)
+
         logger.info(
             "Video scan complete: %s (%.2f%% confidence, %d frames)",
             result.status,
             result.confidence,
             result.frames_analyzed,
         )
-        return _result_to_dict(result, media_type="video")
+        return _result_to_dict(result, media_type="video", gradcam_base64=gradcam_base64)
 
     finally:
         cap.release()
