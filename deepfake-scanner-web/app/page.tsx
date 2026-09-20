@@ -30,6 +30,8 @@ import {
   Filter,
   ArrowLeft,
   ChevronRight,
+  Sun,
+  Moon,
 } from "lucide-react";
 import * as THREE from "three";
 
@@ -75,9 +77,11 @@ interface PipelineStep {
 function ScanningMesh({
   isScanning,
   resultType,
+  theme = "dark",
 }: {
   isScanning: boolean;
   resultType: "idle" | "fake" | "real";
+  theme?: "dark" | "light";
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
 
@@ -90,7 +94,7 @@ function ScanningMesh({
     }
   });
 
-  let meshColor = "#1e293b";
+  let meshColor = theme === "light" ? "#94a3b8" : "#1e293b";
   if (isScanning) meshColor = "#3b82f6";
   else if (resultType === "fake") meshColor = "#ef4444";
   else if (resultType === "real") meshColor = "#10b981";
@@ -108,8 +112,8 @@ function ScanningMesh({
           isScanning ? 0.6 : resultType !== "idle" ? 0.4 : 0.2
         }
         speed={isScanning ? 5 : 2}
-        roughness={0.2}
-        metalness={0.8}
+        roughness={theme === "light" ? 0.4 : 0.2}
+        metalness={theme === "light" ? 0.5 : 0.8}
       />
     </Sphere>
   );
@@ -121,15 +125,19 @@ function ScanningMesh({
 function ConfidenceRing({
   percentage,
   isFake,
+  theme = "dark",
 }: {
   percentage: number;
   isFake: boolean;
+  theme?: "dark" | "light";
 }) {
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
   const color = isFake ? "#ef4444" : "#10b981";
-  const bgColor = isFake ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)";
+  const bgColor = isFake
+    ? (theme === "light" ? "rgba(239,68,68,0.15)" : "rgba(239,68,68,0.1)")
+    : (theme === "light" ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.1)");
 
   return (
     <div className="relative w-44 h-44 mx-auto">
@@ -171,7 +179,7 @@ function ConfidenceRing({
         >
           {percentage}%
         </span>
-        <span className="text-xs text-slate-400 uppercase tracking-widest mt-1">
+        <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1 font-semibold">
           Confidence
         </span>
       </div>
@@ -190,19 +198,19 @@ function PipelineProgress({ steps }: { steps: PipelineStep[] }) {
           key={i}
           className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border transition-all duration-300 ${
             step.status === "active"
-              ? "border-blue-500/40 bg-blue-500/5 scan-step-active"
+              ? "border-blue-500/50 bg-blue-50/80 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/5 dark:text-blue-300 scan-step-active"
               : step.status === "done"
-              ? "border-emerald-500/30 bg-emerald-500/5"
-              : "border-slate-800/50 bg-slate-900/30 opacity-40"
+              ? "border-emerald-500/40 bg-emerald-50/80 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/5 dark:text-emerald-300"
+              : "border-slate-200 bg-slate-50/60 text-slate-400 dark:border-slate-800/50 dark:bg-slate-900/30 dark:text-slate-600 opacity-60 dark:opacity-40"
           }`}
         >
           <div
             className={`flex-shrink-0 ${
               step.status === "active"
-                ? "text-blue-400"
+                ? "text-blue-600 dark:text-blue-400"
                 : step.status === "done"
-                ? "text-emerald-400"
-                : "text-slate-600"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-slate-400 dark:text-slate-600"
             }`}
           >
             {step.status === "done" ? (
@@ -213,15 +221,7 @@ function PipelineProgress({ steps }: { steps: PipelineStep[] }) {
               step.icon
             )}
           </div>
-          <span
-            className={`text-sm font-medium ${
-              step.status === "active"
-                ? "text-blue-300"
-                : step.status === "done"
-                ? "text-emerald-300"
-                : "text-slate-600"
-            }`}
-          >
+          <span className="text-sm font-medium">
             {step.label}
           </span>
         </div>
@@ -243,6 +243,9 @@ export default function DeepfakeScannerApp() {
   const [mounted, setMounted] = useState(false);
   const [pipelineStep, setPipelineStep] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Theme State ---
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   // --- New Feature States ---
   const [activeTab, setActiveTab] = useState<"scanner" | "history">("scanner");
@@ -277,6 +280,18 @@ export default function DeepfakeScannerApp() {
   useEffect(() => {
     setMounted(true);
 
+    // Load theme
+    try {
+      const savedTheme = localStorage.getItem("deepfake_theme") as "dark" | "light" | null;
+      if (savedTheme === "light") {
+        setTheme("light");
+        document.documentElement.classList.remove("dark");
+      } else {
+        setTheme("dark");
+        document.documentElement.classList.add("dark");
+      }
+    } catch (e) {}
+
     // Load active session
     const session = localStorage.getItem("deepfake_session");
     if (session) {
@@ -297,6 +312,19 @@ export default function DeepfakeScannerApp() {
       }
     }
   }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    try {
+      localStorage.setItem("deepfake_theme", next);
+    } catch (e) {}
+    if (next === "light") {
+      document.documentElement.classList.remove("dark");
+    } else {
+      document.documentElement.classList.add("dark");
+    }
+  };
 
   // Cleanup preview URL on unmount or file change
   useEffect(() => {
@@ -680,18 +708,19 @@ export default function DeepfakeScannerApp() {
     : "real";
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-0 font-sans overflow-x-hidden relative">
+    <main className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col items-center p-0 font-sans overflow-x-hidden relative transition-colors duration-200">
       
       {/* 3D CANVAS BACKGROUND — Client-only with Suspense */}
       {mounted && (
-        <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+        <div className="absolute inset-0 z-0 opacity-30 dark:opacity-20 pointer-events-none transition-opacity duration-300">
           <Canvas>
-            <ambientLight intensity={0.5} />
-            <directionalLight position={[10, 10, 10]} intensity={2} />
+            <ambientLight intensity={theme === "light" ? 0.9 : 0.5} />
+            <directionalLight position={[10, 10, 10]} intensity={theme === "light" ? 1.5 : 2} />
             <Suspense fallback={null}>
               <ScanningMesh
                 isScanning={isScanning}
                 resultType={resultType}
+                theme={theme}
               />
             </Suspense>
             <OrbitControls
@@ -703,11 +732,11 @@ export default function DeepfakeScannerApp() {
       )}
 
       {/* HEADER / NAVIGATION BAR */}
-      <header className="w-full bg-slate-900/60 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-40 px-4 md:px-8 py-4">
+      <header className="w-full bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800/80 sticky top-0 z-40 px-4 md:px-8 py-3.5 shadow-xs transition-colors duration-200">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-2 text-blue-500 cursor-pointer" onClick={() => setActiveTab("scanner")}>
             <img src="/logo.png" alt="Dual-Stream AI Logo" className="w-7 h-7 rounded-full object-cover" />
-            <span className="font-bold tracking-tight text-white text-lg md:text-xl">
+            <span className="font-bold tracking-tight text-slate-900 dark:text-white text-lg md:text-xl">
               Dual-Stream AI
             </span>
           </div>
@@ -716,20 +745,20 @@ export default function DeepfakeScannerApp() {
           <nav className="hidden md:flex items-center space-x-1">
             <button
               onClick={() => { setActiveTab("scanner"); setSelectedHistoryItem(null); }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                 activeTab === "scanner"
-                  ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 shadow-xs font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/40"
               }`}
             >
               Scanner
             </button>
             <button
               onClick={() => setActiveTab("history")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
                 activeTab === "history"
-                  ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 shadow-xs font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/40"
               }`}
             >
               <History size={15} />
@@ -737,25 +766,46 @@ export default function DeepfakeScannerApp() {
             </button>
             <a
               href="/legal#privacy"
-              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors"
+              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/40 transition-colors"
             >
               Compliance Hub
             </a>
           </nav>
 
-          {/* Session / Authentication Controls */}
-          <div className="flex items-center space-x-3">
+          {/* Session / Authentication Controls & Theme Toggle */}
+          <div className="flex items-center space-x-2.5">
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all shadow-xs cursor-pointer"
+              title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              aria-label="Toggle theme"
+            >
+              {theme === "dark" ? (
+                <>
+                  <Sun size={15} className="text-amber-400" />
+                  <span className="hidden sm:inline">Light</span>
+                </>
+              ) : (
+                <>
+                  <Moon size={15} className="text-blue-600" />
+                  <span className="hidden sm:inline">Dark</span>
+                </>
+              )}
+            </button>
+
             {currentUser ? (
-              <div className="flex items-center space-x-3 bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-full">
-                <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 text-xs font-bold">
+              <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 px-3 py-1 rounded-full">
+                <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 text-xs font-bold">
                   {currentUser.name.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-xs font-medium text-slate-300 hidden sm:inline-block max-w-[120px] truncate">
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 hidden sm:inline-block max-w-[120px] truncate">
                   {currentUser.name}
                 </span>
                 <button
                   onClick={handleLogout}
-                  className="p-1 rounded-md text-slate-500 hover:text-red-400 transition"
+                  className="p-1 rounded-md text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 transition cursor-pointer"
                   title="Sign Out"
                 >
                   <LogOut size={14} />
@@ -764,7 +814,7 @@ export default function DeepfakeScannerApp() {
             ) : (
               <button
                 onClick={() => { setIsRegistering(false); setShowAuthModal(true); }}
-                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors cursor-pointer shadow-xs"
               >
                 <User size={13} />
                 Sign In
@@ -775,11 +825,11 @@ export default function DeepfakeScannerApp() {
       </header>
 
       {/* MOBILE TAB NAVIGATION (STAYS ON BOTTOM / HIDDEN ON DESKTOP) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-lg border-t border-slate-800/80 z-30 px-6 py-3 flex justify-around">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800/80 z-30 px-6 py-3 flex justify-around transition-colors">
         <button
           onClick={() => { setActiveTab("scanner"); setSelectedHistoryItem(null); }}
-          className={`flex flex-col items-center gap-1 text-[10px] font-semibold ${
-            activeTab === "scanner" ? "text-blue-400" : "text-slate-500"
+          className={`flex flex-col items-center gap-1 text-[10px] font-semibold cursor-pointer ${
+            activeTab === "scanner" ? "text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400"
           }`}
         >
           <ScanLine size={18} />
@@ -787,8 +837,8 @@ export default function DeepfakeScannerApp() {
         </button>
         <button
           onClick={() => setActiveTab("history")}
-          className={`flex flex-col items-center gap-1 text-[10px] font-semibold ${
-            activeTab === "history" ? "text-blue-400" : "text-slate-500"
+          className={`flex flex-col items-center gap-1 text-[10px] font-semibold cursor-pointer ${
+            activeTab === "history" ? "text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400"
           }`}
         >
           <History size={18} />
@@ -796,7 +846,7 @@ export default function DeepfakeScannerApp() {
         </button>
         <a
           href="/legal#privacy"
-          className="flex flex-col items-center gap-1 text-[10px] font-semibold text-slate-500"
+          className="flex flex-col items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400"
         >
           <ShieldCheck size={18} />
           Compliance
@@ -813,16 +863,16 @@ export default function DeepfakeScannerApp() {
           <div className="w-full flex flex-col items-center">
             {/* Title description */}
             <div className="max-w-3xl w-full text-center space-y-3 mb-8">
-              <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+              <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                 Deepfake Media Scanner
               </h2>
-              <p className="text-slate-400 text-xs md:text-sm max-w-xl mx-auto">
+              <p className="text-slate-600 dark:text-slate-400 text-xs md:text-sm max-w-xl mx-auto">
                 Secure, client-private deepfake verification for photos and videos using dual-stream neural networks. All analysis is local in RAM.
               </p>
             </div>
 
             {/* MAIN CARD */}
-            <div className="max-w-lg w-full bg-slate-900/70 backdrop-blur-2xl border border-slate-800/80 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+            <div className="max-w-lg w-full bg-white/90 dark:bg-slate-900/70 backdrop-blur-2xl border border-slate-200/90 dark:border-slate-800/80 rounded-3xl p-6 shadow-xl shadow-slate-200/50 dark:shadow-2xl relative overflow-hidden transition-colors duration-200">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-60" />
               
               {/* ---- STATE: No result, no file selected → Upload Zone ---- */}
@@ -830,8 +880,8 @@ export default function DeepfakeScannerApp() {
                 <div
                   className={`flex flex-col items-center justify-center space-y-6 py-10 rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer ${
                     isDragging
-                      ? "border-blue-500 bg-blue-500/5 glow-blue"
-                      : "border-slate-800 hover:border-slate-700 bg-slate-950/20"
+                      ? "border-blue-500 bg-blue-50/50 dark:bg-blue-500/5 glow-blue"
+                      : "border-slate-300 dark:border-slate-800 hover:border-blue-400 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-950/20"
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -840,27 +890,27 @@ export default function DeepfakeScannerApp() {
                 >
                   <div
                     className={`p-5 rounded-full transition-colors duration-300 ${
-                      isDragging ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/40 text-slate-500"
+                      isDragging ? "bg-blue-500/20 text-blue-500 dark:text-blue-400" : "bg-blue-50 dark:bg-slate-800/40 text-blue-600 dark:text-slate-500 border border-blue-100 dark:border-transparent"
                     }`}
                   >
                     <UploadCloud size={40} />
                   </div>
 
                   <div className="text-center px-4">
-                    <h3 className="text-lg font-bold text-slate-200">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">
                       {isDragging ? "Drop your file here" : "Analyze Media"}
                     </h3>
                     <p className="text-xs text-slate-500 mt-2">
                       Drag &amp; drop or click to choose from system
                     </p>
-                    <p className="text-[10px] text-slate-600 mt-1 font-mono uppercase tracking-wider">
+                    <p className="text-[10px] text-slate-500 dark:text-slate-600 mt-1 font-mono uppercase tracking-wider">
                       MP4, MOV, JPG, PNG, WebP — Max 50 MB
                     </p>
                   </div>
 
                   <button
                     type="button"
-                    className="flex justify-center bg-slate-950 hover:bg-slate-900 text-slate-300 text-xs font-semibold px-6 py-3 rounded-xl border border-slate-800 hover:border-slate-700 transition w-[160px] text-center"
+                    className="flex justify-center bg-white hover:bg-slate-50 text-slate-700 border-slate-300 shadow-xs hover:border-slate-400 dark:bg-slate-950 dark:hover:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:border-slate-700 text-xs font-semibold px-6 py-3 rounded-xl border transition w-[160px] text-center cursor-pointer"
                   >
                     Select File
                   </button>
@@ -878,7 +928,7 @@ export default function DeepfakeScannerApp() {
               {file && !result && !isScanning && (
                 <div className="flex flex-col items-center space-y-5 animate-fade-in-up">
                   {/* Preview */}
-                  <div className="w-full rounded-xl overflow-hidden border border-slate-800/80 bg-slate-950 relative">
+                  <div className="w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800/80 bg-black relative">
                     {isImageFile(file.name) ? (
                       <img
                         src={previewUrl || ""}
@@ -895,14 +945,14 @@ export default function DeepfakeScannerApp() {
                   </div>
 
                   {/* File metadata */}
-                  <div className="w-full flex items-center gap-3 bg-slate-950/60 px-4 py-3 rounded-lg border border-slate-800/60">
+                  <div className="w-full flex items-center gap-3 bg-slate-50 dark:bg-slate-950/60 px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-800/60 transition-colors">
                     {isImageFile(file.name) ? (
                       <ImageIcon size={18} className="text-blue-400 flex-shrink-0" />
                     ) : (
                       <FileVideo size={18} className="text-blue-400 flex-shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-slate-200 truncate">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
                         {file.name}
                       </p>
                       <p className="text-[10px] text-slate-500">
@@ -913,7 +963,7 @@ export default function DeepfakeScannerApp() {
                     <button
                       type="button"
                       onClick={handleClear}
-                      className="p-1.5 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition"
+                      className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 dark:text-slate-500 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition cursor-pointer"
                       aria-label="Remove file"
                     >
                       <X size={16} />
@@ -939,9 +989,9 @@ export default function DeepfakeScannerApp() {
               {isScanning && (
                 <div className="flex flex-col items-center space-y-5 animate-fade-in-up">
                   <div className="p-5 rounded-full bg-blue-500/10 animate-pulse">
-                    <ShieldCheck size={36} className="text-blue-400" />
+                    <ShieldCheck size={36} className="text-blue-500 dark:text-blue-400" />
                   </div>
-                  <h3 className="text-lg font-bold text-blue-300">
+                  <h3 className="text-lg font-bold text-blue-600 dark:text-blue-300">
                     Scanning File...
                   </h3>
                   <PipelineProgress steps={pipelineSteps} />
@@ -953,23 +1003,24 @@ export default function DeepfakeScannerApp() {
                 <div className="flex flex-col items-center space-y-5 stagger-children">
                   {/* Confidence Ring */}
                   <div
-                    className={`rounded-2xl p-4 w-full flex justify-center border ${
+                    className={`rounded-2xl p-4 w-full flex justify-center border transition-all ${
                       result.isFake
-                        ? "bg-red-500/5 border-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.05)]"
+                        ? "bg-red-50/80 border-red-200 dark:bg-red-500/5 dark:border-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.08)]"
                         : result.status.toLowerCase().includes("error")
-                        ? "bg-slate-900/50 border-slate-800"
-                        : "bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.05)]"
+                        ? "bg-slate-100 border-slate-200 dark:bg-slate-900/50 dark:border-slate-800"
+                        : "bg-emerald-50/80 border-emerald-200 dark:bg-emerald-500/5 dark:border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.08)]"
                     }`}
                   >
                     {!result.status.toLowerCase().includes("error") ? (
                       <ConfidenceRing
                         percentage={result.confidence}
                         isFake={result.isFake}
+                        theme={theme}
                       />
                     ) : (
                       <div className="py-2 text-center">
                         <AlertTriangle size={36} className="text-yellow-500 mx-auto mb-2 animate-bounce" />
-                        <span className="text-sm font-semibold text-slate-300">Analysis Failed</span>
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Analysis Failed</span>
                       </div>
                     )}
                   </div>
@@ -1000,7 +1051,7 @@ export default function DeepfakeScannerApp() {
                     {/* Media type badge */}
                     {!result.status.toLowerCase().includes("error") && (
                       <div className="flex items-center justify-center gap-2 mt-1">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700/80 uppercase font-mono">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700/80 uppercase font-mono shadow-xs">
                           {result.mediaType === "image" ? (
                             <ImageIcon size={10} />
                           ) : (
@@ -1015,36 +1066,36 @@ export default function DeepfakeScannerApp() {
                   </div>
 
                   {/* Detection Reasoning */}
-                  <div className="w-full bg-slate-950/40 p-4 rounded-xl border border-slate-800/80 text-left space-y-4">
+                  <div className="w-full bg-slate-50/80 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-200 dark:border-slate-800/80 text-left space-y-4 transition-colors">
                     <div>
-                      <div className="flex items-center space-x-2 text-slate-300 mb-2">
-                        <Activity size={14} className="text-blue-400" />
+                      <div className="flex items-center space-x-2 text-slate-700 dark:text-slate-300 mb-2">
+                        <Activity size={14} className="text-blue-600 dark:text-blue-400" />
                         <span className="font-bold text-xs">
                           {result.status.toLowerCase().includes("error") ? "Error Details" : "Detection Diagnostics"}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
                         {result.explanation}
                       </p>
                     </div>
 
                     {result.gradcamBase64 && (
-                      <div className="pt-3 border-t border-slate-800/60">
-                        <div className="flex items-center space-x-2 text-slate-300 mb-3">
-                          <Brain size={14} className="text-purple-400" />
+                      <div className="pt-3 border-t border-slate-200 dark:border-slate-800/60">
+                        <div className="flex items-center space-x-2 text-slate-700 dark:text-slate-300 mb-3">
+                          <Brain size={14} className="text-purple-600 dark:text-purple-400" />
                           <span className="font-bold text-xs">
                             Explainable AI (Grad-CAM Activation Map)
                           </span>
                         </div>
-                        <div className="relative group overflow-hidden rounded-xl border border-slate-800 bg-slate-950/60 max-w-xs mx-auto md:max-w-none md:w-full flex justify-center p-2">
+                        <div className="relative group overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/60 max-w-xs mx-auto md:max-w-none md:w-full flex justify-center p-2 shadow-xs">
                           <img
                             src={result.gradcamBase64}
                             alt="Explainable AI Heatmap"
                             className="rounded-lg object-contain w-full h-48 md:h-56 transition-transform duration-500 group-hover:scale-105"
                           />
-                          <div className="absolute bottom-3 left-3 right-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] text-slate-400 flex items-center justify-between">
+                          <div className="absolute bottom-3 left-3 right-3 bg-white/90 dark:bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] text-slate-600 dark:text-slate-400 flex items-center justify-between shadow-xs">
                             <span>Red = High Manipulation Probability</span>
-                            <span className="text-blue-400 font-medium">EfficientNet-B0</span>
+                            <span className="text-blue-600 dark:text-blue-400 font-medium">EfficientNet-B0</span>
                           </div>
                         </div>
                       </div>
@@ -1069,7 +1120,7 @@ export default function DeepfakeScannerApp() {
 
                   {/* Feedback & Share Row */}
                   {!result.status.toLowerCase().includes("error") && (
-                    <div className="flex justify-between items-center w-full pt-4 border-t border-slate-800/50">
+                    <div className="flex justify-between items-center w-full pt-4 border-t border-slate-200 dark:border-slate-800/50">
                       <div className="flex space-x-3 items-center">
                         <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                           Feedback:
@@ -1078,10 +1129,10 @@ export default function DeepfakeScannerApp() {
                           type="button"
                           aria-label="Helpful"
                           onClick={() => setFeedbackGiven(true)}
-                          className={`p-1.5 rounded-md transition ${
+                          className={`p-1.5 rounded-md transition cursor-pointer ${
                             feedbackGiven
-                              ? "text-blue-400 bg-blue-400/10"
-                              : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
+                              ? "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-400/10"
+                              : "text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800"
                           }`}
                         >
                           <ThumbsUp size={16} />
@@ -1090,10 +1141,10 @@ export default function DeepfakeScannerApp() {
                           type="button"
                           aria-label="Incorrect"
                           onClick={() => setFeedbackGiven(true)}
-                          className={`p-1.5 rounded-md transition ${
+                          className={`p-1.5 rounded-md transition cursor-pointer ${
                             feedbackGiven
-                              ? "text-slate-700"
-                              : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
+                              ? "text-slate-400 dark:text-slate-700"
+                              : "text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800"
                           }`}
                         >
                           <ThumbsDown size={16} />
@@ -1103,7 +1154,7 @@ export default function DeepfakeScannerApp() {
                       <button
                         type="button"
                         onClick={handleShare}
-                        className="flex items-center space-x-1.5 text-xs font-semibold text-slate-300 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 px-3 py-1.5 rounded-lg transition"
+                        className="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/50 px-3 py-1.5 rounded-lg transition shadow-xs cursor-pointer"
                       >
                         <Share2 size={13} />
                         <span>Share</span>
@@ -1114,7 +1165,7 @@ export default function DeepfakeScannerApp() {
                   {/* Scan New */}
                   <button
                     onClick={handleClear}
-                    className="w-full py-2.5 text-xs font-semibold text-slate-400 hover:text-white bg-slate-950 hover:bg-slate-900 rounded-xl border border-slate-800 transition cursor-pointer"
+                    className="w-full py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-950 hover:bg-slate-200 dark:hover:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 transition cursor-pointer shadow-xs"
                   >
                     Clear Result &amp; Scan Again
                   </button>
@@ -1131,11 +1182,11 @@ export default function DeepfakeScannerApp() {
           <div className="w-full max-w-4xl animate-fade-in-up flex flex-col space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-extrabold text-white flex items-center gap-2">
+                <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                   <History className="text-blue-500" />
                   Your Scan History
                 </h2>
-                <p className="text-slate-400 text-xs mt-1">
+                <p className="text-slate-600 dark:text-slate-400 text-xs mt-1">
                   {currentUser 
                     ? `Logged in as ${currentUser.name}. Reviewing account scans.` 
                     : "Browsing as guest. History is stored locally on this machine."}
@@ -1145,7 +1196,7 @@ export default function DeepfakeScannerApp() {
               {filteredHistory.length > 0 && (
                 <button
                   onClick={handleClearHistory}
-                  className="flex items-center gap-1.5 text-xs font-bold text-red-400 hover:text-red-300 border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 px-4 py-2 rounded-xl transition cursor-pointer self-start sm:self-auto"
+                  className="flex items-center gap-1.5 text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 hover:bg-red-100 dark:hover:bg-red-500/10 px-4 py-2 rounded-xl transition cursor-pointer self-start sm:self-auto shadow-xs"
                 >
                   <Trash2 size={14} />
                   Clear All Scan History
@@ -1154,7 +1205,7 @@ export default function DeepfakeScannerApp() {
             </div>
 
             {/* Filter Bar & Search */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 p-4 rounded-2xl shadow-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white/90 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-slate-800/80 p-4 rounded-2xl shadow-sm dark:shadow-lg transition-colors">
               {/* Search */}
               <div className="relative md:col-span-2">
                 <Search size={16} className="absolute left-3.5 top-3.5 text-slate-500" />
@@ -1163,7 +1214,7 @@ export default function DeepfakeScannerApp() {
                   placeholder="Search scans by filename..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800/80 focus:border-blue-500 focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 focus:border-blue-500 focus:bg-white focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 transition-colors"
                 />
               </div>
 
@@ -1173,7 +1224,7 @@ export default function DeepfakeScannerApp() {
                 <select
                   value={filterType}
                   onChange={(e: any) => setFilterType(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800/80 focus:border-blue-500 focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-400 cursor-pointer appearance-none"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 focus:border-blue-500 focus:bg-white focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-700 dark:text-slate-400 cursor-pointer appearance-none transition-colors"
                 >
                   <option value="all">Filter: Show All Scans</option>
                   <option value="image">Show Images Only</option>
@@ -1193,15 +1244,15 @@ export default function DeepfakeScannerApp() {
               {/* Scan List (Takes 3 cols or full if no selection) */}
               <div className={`space-y-3 ${selectedHistoryItem ? "lg:col-span-3" : "lg:col-span-5"}`}>
                 {filteredHistory.length === 0 ? (
-                  <div className="bg-slate-900/40 border border-slate-800 p-12 rounded-2xl text-center">
+                  <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-12 rounded-2xl text-center shadow-xs">
                     <Activity size={40} className="text-slate-600 mx-auto mb-3" />
-                    <h3 className="text-sm font-bold text-slate-300">No records found</h3>
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">No records found</h3>
                     <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
                       Scans you perform will appear here. Filters or search queries may also limit results.
                     </p>
                     <button
                       onClick={() => setActiveTab("scanner")}
-                      className="mt-4 inline-flex items-center gap-1.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer"
+                      className="mt-4 inline-flex items-center gap-1.5 bg-blue-50 dark:bg-blue-600/10 hover:bg-blue-100 dark:hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer shadow-xs"
                     >
                       <ScanLine size={13} />
                       Scan Media Now
@@ -1214,18 +1265,18 @@ export default function DeepfakeScannerApp() {
                       onClick={() => setSelectedHistoryItem(item)}
                       className={`group flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer ${
                         selectedHistoryItem?.id === item.id
-                          ? "border-blue-500 bg-blue-500/5 shadow-md"
-                          : "border-slate-850 bg-slate-900/40 hover:border-slate-800 hover:bg-slate-900/60"
+                          ? "border-blue-500 bg-blue-50/60 dark:bg-blue-500/5 shadow-sm"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80 dark:border-slate-850 dark:bg-slate-900/40 dark:hover:border-slate-800 dark:hover:bg-slate-900/60 shadow-xs"
                       }`}
                     >
                       <div className="flex items-center space-x-3 min-w-0">
                         <div className={`p-2.5 rounded-lg ${
-                          item.isFake ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"
+                          item.isFake ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400" : "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
                         }`}>
                           {item.mediaType === "image" ? <ImageIcon size={18} /> : <FileVideo size={18} />}
                         </div>
                         <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-slate-200 truncate group-hover:text-white">
+                          <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-blue-600 dark:group-hover:text-white">
                             {item.filename}
                           </h4>
                           <p className="text-[10px] text-slate-500 mt-0.5">
@@ -1237,8 +1288,8 @@ export default function DeepfakeScannerApp() {
                       <div className="flex items-center space-x-3">
                         <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
                           item.isFake
-                            ? "bg-red-500/15 text-red-400 border border-red-500/20"
-                            : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+                            ? "bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/20"
+                            : "bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/20"
                         }`}>
                           {item.isFake ? "Fake" : "Real"} ({item.confidence}%)
                         </span>
@@ -1251,9 +1302,9 @@ export default function DeepfakeScannerApp() {
 
               {/* Scan Detail Panel (Takes 2 cols) */}
               {selectedHistoryItem && (
-                <div className="lg:col-span-2 bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-5 animate-fade-in-up self-start">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <span className="text-xs font-bold text-slate-400">Scan Diagnostic Report</span>
+                <div className="lg:col-span-2 bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xl shadow-slate-200/50 dark:shadow-2xl space-y-5 animate-fade-in-up self-start transition-colors">
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Scan Diagnostic Report</span>
                     <button
                       onClick={() => setSelectedHistoryItem(null)}
                       className="p-1 rounded-md text-slate-500 hover:text-slate-300 hover:bg-slate-800"
@@ -1267,13 +1318,14 @@ export default function DeepfakeScannerApp() {
                     <ConfidenceRing
                       percentage={selectedHistoryItem.confidence}
                       isFake={selectedHistoryItem.isFake}
+                      theme={theme}
                     />
                   </div>
 
                   {/* Overview details */}
                   <div className="space-y-3">
                     <div className="text-center">
-                      <h4 className={`text-lg font-bold ${selectedHistoryItem.isFake ? "text-red-400" : "text-emerald-400"}`}>
+                      <h4 className={`text-lg font-bold ${selectedHistoryItem.isFake ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
                         Verdict: {selectedHistoryItem.status}
                       </h4>
                       <p className="text-[10px] text-slate-500 font-mono truncate mt-1">
@@ -1281,9 +1333,9 @@ export default function DeepfakeScannerApp() {
                       </p>
                     </div>
 
-                    <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-850 text-left">
-                      <span className="text-[10px] font-bold text-slate-400 block mb-1">Inference Analysis</span>
-                      <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                    <div className="bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-850 text-left">
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-1">Inference Analysis</span>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
                         {selectedHistoryItem.explanation}
                       </p>
                     </div>
@@ -1291,7 +1343,7 @@ export default function DeepfakeScannerApp() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleShareHistoryItem(selectedHistoryItem)}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-755 text-slate-300 text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-700/50 transition cursor-pointer"
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-755 dark:text-slate-300 text-xs font-bold px-3 py-2.5 rounded-xl dark:border-slate-700/50 transition cursor-pointer shadow-xs"
                       >
                         <Share2 size={13} />
                         Share Report
@@ -1309,30 +1361,30 @@ export default function DeepfakeScannerApp() {
       {/* COMPONENT: MOCK AUTHENTICATION MODAL                     */}
       {/* ======================================================== */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fade-in-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-slate-950/80 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fade-in-up">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-60" />
             
             <button
               onClick={() => { setShowAuthModal(false); resetAuthFields(); }}
-              className="absolute right-4 top-4 p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition"
+              className="absolute right-4 top-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition cursor-pointer"
             >
               <X size={16} />
             </button>
 
             <div className="text-center space-y-1.5 mb-6">
               <ShieldCheck size={32} className="text-blue-500 mx-auto" />
-              <h3 className="text-lg font-bold text-white">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                 {isRegistering ? "Create Sandbox Account" : "Access Sandbox Platform"}
               </h3>
-              <p className="text-slate-400 text-xs">
+              <p className="text-slate-500 dark:text-slate-400 text-xs">
                 Authentication keeps your scan history synced locally.
               </p>
             </div>
 
             <form onSubmit={handleAuthSubmit} className="space-y-4">
               {authError && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-xl flex items-center gap-1.5">
+                <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs p-3 rounded-xl flex items-center gap-1.5">
                   <AlertTriangle size={14} className="flex-shrink-0" />
                   <span>{authError}</span>
                 </div>
@@ -1340,60 +1392,60 @@ export default function DeepfakeScannerApp() {
 
               {isRegistering && (
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Full Name</label>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Full Name</label>
                   <div className="relative">
-                    <User size={14} className="absolute left-3.5 top-3 text-slate-500" />
+                    <User size={14} className="absolute left-3.5 top-3 text-slate-400" />
                     <input
                       type="text"
                       placeholder="Micheal Akoh"
                       value={authName}
                       onChange={(e) => setAuthName(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-850 focus:border-blue-500 focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 placeholder-slate-600"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 focus:border-blue-500 focus:bg-white focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 transition-colors"
                     />
                   </div>
                 </div>
               )}
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Email Address</label>
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Email Address</label>
                 <div className="relative">
-                  <Mail size={14} className="absolute left-3.5 top-3 text-slate-500" />
+                  <Mail size={14} className="absolute left-3.5 top-3 text-slate-400" />
                   <input
                     type="email"
                     placeholder="akohtech@gmail.com"
                     value={authEmail}
                     onChange={(e) => setAuthEmail(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-850 focus:border-blue-500 focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 placeholder-slate-600"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 focus:border-blue-500 focus:bg-white focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 transition-colors"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Password</label>
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Password</label>
                 <div className="relative">
-                  <Lock size={14} className="absolute left-3.5 top-3 text-slate-500" />
+                  <Lock size={14} className="absolute left-3.5 top-3 text-slate-400" />
                   <input
                     type="password"
                     placeholder="••••••••"
                     value={authPassword}
                     onChange={(e) => setAuthPassword(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-850 focus:border-blue-500 focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 placeholder-slate-600"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 focus:border-blue-500 focus:bg-white focus:outline-hidden rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 transition-colors"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-3 rounded-xl transition cursor-pointer mt-2"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-3 rounded-xl transition cursor-pointer mt-2 shadow-xs"
               >
                 {isRegistering ? "Register Account" : "Access Sandbox"}
               </button>
             </form>
 
-            <div className="mt-5 pt-4 border-t border-slate-800/80 text-center">
+            <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-800/80 text-center">
               <button
                 onClick={() => { setIsRegistering(!isRegistering); setAuthError(""); }}
-                className="text-xs font-medium text-slate-400 hover:text-blue-400 transition"
+                className="text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition cursor-pointer"
               >
                 {isRegistering
                   ? "Already have a credentials profile? Sign In"
